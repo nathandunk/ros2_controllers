@@ -193,7 +193,7 @@ controller_interface::return_type AdmittanceRule::update(
   process_wrench_measurements(
     measured_wrench,
     // pass rotations into sensor and CoG:
-    rot_base_world * rot_base_ft, rot_base_world * rot_base_cog);
+    rot_base_world.transpose() * rot_base_ft, rot_base_world.transpose() * rot_base_cog);
 
   // transform filtered wrench into the robot base frame
   admittance_state_.wrench_base.block<3, 1>(0, 0) =
@@ -313,8 +313,8 @@ bool AdmittanceRule::calculate_admittance_rule(AdmittanceState & admittance_stat
 
 void AdmittanceRule::process_wrench_measurements(
   const geometry_msgs::msg::Wrench & measured_wrench,
-  const Eigen::Matrix<double, 3, 3> & sensor_world_rot,
-  const Eigen::Matrix<double, 3, 3> & cog_world_rot)
+  const Eigen::Matrix<double, 3, 3> & rot_world_ft,
+  const Eigen::Matrix<double, 3, 3> & rot_world_cog)
 {
   Eigen::Matrix<double, 3, 2, Eigen::ColMajor> new_wrench;
   new_wrench(0, 0) = measured_wrench.force.x;
@@ -325,17 +325,17 @@ void AdmittanceRule::process_wrench_measurements(
   new_wrench(2, 1) = measured_wrench.torque.z;
 
   // transform to world frame
-  Eigen::Matrix<double, 3, 2> new_wrench_base = sensor_world_rot * new_wrench;
+  Eigen::Matrix<double, 3, 2> new_wrench_world = rot_world_ft * new_wrench;
 
   // apply gravity compensation
-  new_wrench_base(2, 0) -= end_effector_weight_[2];
-  new_wrench_base.block<3, 1>(0, 1) -= (cog_world_rot * cog_pos_).cross(end_effector_weight_);
+  new_wrench_world(2, 0) -= end_effector_weight_[2];
+  new_wrench_world.block<3, 1>(0, 1) -= (rot_world_cog * cog_pos_).cross(end_effector_weight_);
 
   // apply smoothing filter
   for (Eigen::Index i = 0; i < 6; ++i)
   {
     wrench_world_(i) = filters::exponentialSmoothing(
-      new_wrench_base(i), wrench_world_(i), parameters_.ft_sensor.filter_coefficient);
+      new_wrench_world(i), wrench_world_(i), parameters_.ft_sensor.filter_coefficient);
   }
 }
 
