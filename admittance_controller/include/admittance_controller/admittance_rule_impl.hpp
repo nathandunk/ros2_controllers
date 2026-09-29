@@ -160,40 +160,46 @@ controller_interface::return_type AdmittanceRule::update(
   // Reusable transform variable
   Eigen::Isometry3d tf;
 
+  // All frames are referred to as rot_<from>_<to>.
+  // For example, rot_base_control represents the rotation from the base frame
+  // to the control frame.
+
   // --- FT sensor frame to base frame (translation + rotation) ---
   success &= kinematics_->calculate_link_transform(
     reference_joint_state.positions, parameters_.ft_sensor.frame.id, tf);
   admittance_state_.ref_trans_base_ft = tf;
 
-  // --- world frame to base frame (we only need the rotation) ---
+  // --- base frame to world frame (rotation only) ---
   success &= kinematics_->calculate_link_transform(
     current_joint_state.positions, parameters_.fixed_world_frame.frame.id, tf);
-  const Eigen::Matrix3d rot_world_base = tf.rotation();
+  const Eigen::Matrix3d rot_base_world = tf.rotation();
 
-  // --- control/base frame to base frame (rotation only) ---
+  // --- base frame to control frame (rotation only) ---
   success &= kinematics_->calculate_link_transform(
     current_joint_state.positions, parameters_.control.frame.id, tf);
-  admittance_state_.rot_base_control = tf.rotation();
-
+    admittance_state_.rot_base_control = tf.rotation();
+    
+  // --- base frame to gravity compensation CoG frame (rotation only) ---
   success &= kinematics_->calculate_link_transform(
     current_joint_state.positions, parameters_.gravity_compensation.frame.id, tf);
-  const Eigen::Matrix3d rot_tf_cog = tf.rotation();
-
+    const Eigen::Matrix3d rot_base_cog = tf.rotation();
+    
+    // --- base frame to ft sensor frame (rotation only) ---
   success &= kinematics_->calculate_link_transform(
     current_joint_state.positions, parameters_.ft_sensor.frame.id, tf);
-  const Eigen::Matrix3d rot_tf_base_ft = tf.rotation();
+  const Eigen::Matrix3d rot_base_ft = tf.rotation();
 
   // wrench processing (gravity + filter) in world
   process_wrench_measurements(
     measured_wrench,
     // pass rotations into sensor and CoG:
-    rot_world_base * rot_tf_base_ft, rot_world_base * rot_tf_cog);
+    rot_base_world * rot_base_ft, rot_base_world * rot_base_cog);
 
   // transform filtered wrench into the robot base frame
   admittance_state_.wrench_base.block<3, 1>(0, 0) =
-    rot_world_base.transpose() * wrench_world_.block<3, 1>(0, 0);
+    rot_base_world * wrench_world_.block<3, 1>(0, 0);
   admittance_state_.wrench_base.block<3, 1>(3, 0) =
-    rot_world_base.transpose() * wrench_world_.block<3, 1>(3, 0);
+    rot_base_world * wrench_world_.block<3, 1>(3, 0);
 
   // populate current joint positions in the state
   vec_to_eigen(current_joint_state.positions, admittance_state_.current_joint_pos);
