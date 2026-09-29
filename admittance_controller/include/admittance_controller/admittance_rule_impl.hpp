@@ -178,6 +178,7 @@ controller_interface::return_type AdmittanceRule::update(
   success &= kinematics_->calculate_link_transform(
     current_joint_state.positions, parameters_.control.frame.id, tf);
     admittance_state_.rot_base_control = tf.rotation();
+  const Eigen::Isometry3d tf_base_control = tf;
     
   // --- base frame to gravity compensation CoG frame (rotation only) ---
   success &= kinematics_->calculate_link_transform(
@@ -193,7 +194,10 @@ controller_interface::return_type AdmittanceRule::update(
   process_wrench_measurements(
     measured_wrench,
     // pass rotations into sensor and CoG:
-    rot_base_world.transpose() * rot_base_ft, rot_base_world.transpose() * rot_base_cog);
+    rot_base_world.transpose() * rot_base_ft, 
+    rot_base_world.transpose() * admittance_state_.rot_base_control, 
+    rot_base_world.transpose() * rot_base_cog,
+    adjoint_map(admittance_state_.ref_trans_base_ft.inverse()*tf_base_control));
 
   // transform filtered wrench into the robot base frame
   admittance_state_.wrench_base.block<3, 1>(0, 0) =
@@ -311,10 +315,32 @@ bool AdmittanceRule::calculate_admittance_rule(AdmittanceState & admittance_stat
   return success;
 }
 
+// Northwestern's Modern Robitics: Definition 3.20
+Eigen::Matrix<double, 6, 6> AdmittanceRule::adjoint_map(Eigen::Isometry3d transform)
+{
+  Eigen::Matrix<double, 6, 6> adjoint_map;
+  adjoint_map.block<3, 3>(0,0) = transform.rotation();
+  adjoint_map.block<3, 3>(0,3) = Eigen::Matrix<double, 3, 3>::Zero();
+  adjoint_map.block<3, 3>(3,0) = skew_symmetric(transform.translation())*transform.rotation();
+  adjoint_map.block<3, 3>(3,3) = transform.rotation();
+  return adjoint_map;
+}
+
+Eigen::Matrix3d AdmittanceRule::skew_symmetric(Eigen::Matrix<double, 3, 1> vector)
+{
+  Eigen::Matrix3d skew_symmetric_matrix;
+  skew_symmetric_matrix <<             0, -vector(2, 0),  vector(1, 0),
+                            vector(2, 0),             0, -vector(0, 0),
+                           -vector(1, 0),  vector(0, 0),             0;
+  return skew_symmetric_matrix;
+}
+
 void AdmittanceRule::process_wrench_measurements(
   const geometry_msgs::msg::Wrench & measured_wrench,
   const Eigen::Matrix<double, 3, 3> & rot_world_ft,
-  const Eigen::Matrix<double, 3, 3> & rot_world_cog)
+  const Eigen::Matrix<double, 3, 3> & rot_world_control,
+  const Eigen::Matrix<double, 3, 3> & rot_world_cog,
+  const Eigen::Matrix<double, 6, 6> & adjoint_map_ft_control)
 {
   Eigen::Matrix<double, 3, 2, Eigen::ColMajor> new_wrench;
   new_wrench(0, 0) = measured_wrench.force.x;

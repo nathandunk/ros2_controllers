@@ -143,6 +143,17 @@ protected:
   bool calculate_admittance_rule(AdmittanceState & admittance_state, double dt);
 
   /**
+   * Get the adjoint map of a transformation matrix (isometry3d) based on Northwestern's Modern 
+   * Robotics Definition 3.20
+   */
+  Eigen::Matrix<double, 6, 6> adjoint_map(Eigen::Isometry3d transform);
+
+  /**
+   * Get the skew symmetric representation of a 3d vector
+   */
+  Eigen::Matrix3d skew_symmetric(Eigen::Matrix<double, 3, 1> vector);
+
+  /**
    * Updates internal estimate of wrench in world frame `wrench_world_` given the new measurement
    * `measured_wrench`, the sensor to base frame rotation `sensor_world_rot`, and the center of
    * gravity frame to base frame rotation `cog_world_rot`. The `wrench_world_` estimate includes
@@ -152,8 +163,10 @@ protected:
    */
   void process_wrench_measurements(
     const geometry_msgs::msg::Wrench & measured_wrench,
-    const Eigen::Matrix<double, 3, 3> & sensor_world_rot,
-    const Eigen::Matrix<double, 3, 3> & cog_world_rot);
+    const Eigen::Matrix<double, 3, 3> & rot_world_ft,
+    const Eigen::Matrix<double, 3, 3> & rot_world_control,
+    const Eigen::Matrix<double, 3, 3> & rot_world_cog,
+    const Eigen::Matrix<double, 6, 6> & adjoint_map_ft_control);
 
   template <typename T1, typename T2>
   void vec_to_eigen(const std::vector<T1> & data, T2 & matrix);
