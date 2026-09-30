@@ -350,8 +350,23 @@ void AdmittanceRule::process_wrench_measurements(
   new_wrench(1, 1) = measured_wrench.torque.y;
   new_wrench(2, 1) = measured_wrench.torque.z;
 
+  // convert the wrench into 1d so that we can do the Wrench conversion
+  // Note - For this equation, moments go before forces
+  Eigen::Matrix<double, 6, 1> new_wrench_ft_1d;
+  new_wrench_ft_1d.block<3, 1>(3, 0) = new_wrench.block<3, 1>(0, 0);
+  new_wrench_ft_1d.block<3, 1>(0, 0) = new_wrench.block<3, 1>(0, 1);
+
+  // do the wrench conversion based on eq 3.95 in Northwestern Modern Robotics
+  Eigen::Matrix<double, 6, 1> new_wrench_control_1d = adjoint_map_ft_control.transpose()*new_wrench_ft_1d;
+
+  // convert back to a 2d matrix
+  // Note - For this equation, moments go before forces
+  Eigen::Matrix<double, 3, 2, Eigen::ColMajor> new_wrench_control_2d;
+  new_wrench_control_2d.block<3, 1>(0, 0) = new_wrench_control_1d.block<3, 1>(3, 0);
+  new_wrench_control_2d.block<3, 1>(0, 1) = new_wrench_control_1d.block<3, 1>(0, 0);
+
   // transform to world frame
-  Eigen::Matrix<double, 3, 2> new_wrench_world = rot_world_ft * new_wrench;
+  Eigen::Matrix<double, 3, 2> new_wrench_world = rot_world_control * new_wrench_control_2d;
 
   // apply gravity compensation
   new_wrench_world(2, 0) -= end_effector_weight_[2];
