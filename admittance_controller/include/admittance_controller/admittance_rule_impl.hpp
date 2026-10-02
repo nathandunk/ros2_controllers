@@ -177,15 +177,15 @@ controller_interface::return_type AdmittanceRule::update(
   // --- base frame to control frame (rotation only) ---
   success &= kinematics_->calculate_link_transform(
     current_joint_state.positions, parameters_.control.frame.id, tf);
-    admittance_state_.rot_base_control = tf.rotation();
+  admittance_state_.rot_base_control = tf.rotation();
   const Eigen::Isometry3d tf_base_control = tf;
-    
+
   // --- base frame to gravity compensation CoG frame (rotation only) ---
   success &= kinematics_->calculate_link_transform(
     current_joint_state.positions, parameters_.gravity_compensation.frame.id, tf);
-    const Eigen::Matrix3d rot_base_cog = tf.rotation();
-    
-    // --- base frame to ft sensor frame (rotation only) ---
+  const Eigen::Matrix3d rot_base_cog = tf.rotation();
+
+  // --- base frame to ft sensor frame (rotation only) ---
   success &= kinematics_->calculate_link_transform(
     current_joint_state.positions, parameters_.ft_sensor.frame.id, tf);
   const Eigen::Matrix3d rot_base_ft = tf.rotation();
@@ -194,10 +194,10 @@ controller_interface::return_type AdmittanceRule::update(
   process_wrench_measurements(
     measured_wrench,
     // pass rotations into sensor and CoG:
-    rot_base_world.transpose() * rot_base_ft, 
-    rot_base_world.transpose() * admittance_state_.rot_base_control, 
+    rot_base_world.transpose() * rot_base_ft,
+    rot_base_world.transpose() * admittance_state_.rot_base_control,
     rot_base_world.transpose() * rot_base_cog,
-    adjoint_map(admittance_state_.ref_trans_base_ft.inverse()*tf_base_control));
+    adjoint_map(admittance_state_.ref_trans_base_ft.inverse() * tf_base_control));
 
   // transform filtered wrench into the robot base frame
   admittance_state_.wrench_base.block<3, 1>(0, 0) =
@@ -319,19 +319,18 @@ bool AdmittanceRule::calculate_admittance_rule(AdmittanceState & admittance_stat
 Eigen::Matrix<double, 6, 6> AdmittanceRule::adjoint_map(Eigen::Isometry3d transform)
 {
   Eigen::Matrix<double, 6, 6> adjoint_map;
-  adjoint_map.block<3, 3>(0,0) = transform.rotation();
-  adjoint_map.block<3, 3>(0,3) = Eigen::Matrix<double, 3, 3>::Zero();
-  adjoint_map.block<3, 3>(3,0) = skew_symmetric(transform.translation())*transform.rotation();
-  adjoint_map.block<3, 3>(3,3) = transform.rotation();
+  adjoint_map.block<3, 3>(0, 0) = transform.rotation();
+  adjoint_map.block<3, 3>(0, 3) = Eigen::Matrix<double, 3, 3>::Zero();
+  adjoint_map.block<3, 3>(3, 0) = skew_symmetric(transform.translation()) * transform.rotation();
+  adjoint_map.block<3, 3>(3, 3) = transform.rotation();
   return adjoint_map;
 }
 
 Eigen::Matrix3d AdmittanceRule::skew_symmetric(Eigen::Matrix<double, 3, 1> vector)
 {
   Eigen::Matrix3d skew_symmetric_matrix;
-  skew_symmetric_matrix <<             0, -vector(2, 0),  vector(1, 0),
-                            vector(2, 0),             0, -vector(0, 0),
-                           -vector(1, 0),  vector(0, 0),             0;
+  skew_symmetric_matrix << 0, -vector(2, 0), vector(1, 0), vector(2, 0), 0, -vector(0, 0),
+    -vector(1, 0), vector(0, 0), 0;
   return skew_symmetric_matrix;
 }
 
@@ -351,7 +350,7 @@ void AdmittanceRule::process_wrench_measurements(
   new_wrench(2, 1) = measured_wrench.torque.z;
 
   // apply gravity compensation
-  auto end_effector_weight_ft = rot_world_ft*end_effector_weight_;
+  auto end_effector_weight_ft = rot_world_ft * end_effector_weight_;
   new_wrench.block<3, 1>(0, 0) -= end_effector_weight_ft;
   new_wrench.block<3, 1>(0, 1) -= cog_pos_.cross(end_effector_weight_ft);
 
@@ -362,7 +361,8 @@ void AdmittanceRule::process_wrench_measurements(
   new_wrench_ft_1d.block<3, 1>(0, 0) = new_wrench.block<3, 1>(0, 1);
 
   // do the wrench conversion based on eq 3.95 in Northwestern Modern Robotics
-  Eigen::Matrix<double, 6, 1> new_wrench_control_1d = adjoint_map_ft_control.transpose()*new_wrench_ft_1d;
+  Eigen::Matrix<double, 6, 1> new_wrench_control_1d =
+    adjoint_map_ft_control.transpose() * new_wrench_ft_1d;
 
   // convert back to a 2d matrix
   // Note - For this equation, moments go before forces

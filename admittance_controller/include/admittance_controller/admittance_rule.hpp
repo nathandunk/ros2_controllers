@@ -143,7 +143,7 @@ protected:
   bool calculate_admittance_rule(AdmittanceState & admittance_state, double dt);
 
   /**
-   * Get the adjoint map of a transformation matrix (isometry3d) based on Northwestern's Modern 
+   * Get the adjoint map of a transformation matrix (isometry3d) based on Northwestern's Modern
    * Robotics Definition 3.20
    */
   Eigen::Matrix<double, 6, 6> adjoint_map(Eigen::Isometry3d transform);
